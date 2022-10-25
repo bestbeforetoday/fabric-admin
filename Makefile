@@ -14,4 +14,9 @@ lint:
 
 .PHONEY: unit-test
 unit-test:
-	go test -timeout=10s "$(base_dir)/..."
+	go test -timeout=10s -coverprofile="$(base_dir)/coverage.out" "$(base_dir)/..."
+
+.PHONEY: generate
+generate:
+	go install github.com/golang/mock/mockgen@v1.6
+	go generate "$(base_dir)/pkg/..."

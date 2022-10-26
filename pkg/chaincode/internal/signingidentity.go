@@ -32,3 +32,18 @@ func (signingID *SigningIdentity) Creator() ([]byte, error) {
 	}
 	return proto.Marshal(serializedIdentity)
 }
+
+func (signingID *SigningIdentity) SignMessage(m proto.Message) (signature []byte, messageBytes []byte, err error) {
+	messageBytes, err = proto.Marshal(m)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	digest := signingID.Hash(messageBytes)
+	signature, err = signingID.Sign(digest)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return signature, messageBytes, nil
+}

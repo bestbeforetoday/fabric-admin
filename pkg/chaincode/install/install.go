@@ -5,8 +5,8 @@ import (
 	"errors"
 	"io"
 
-	"github.com/bestbeforetoday/fabric-admin/pkg/chaincode/internal"
-	"github.com/bestbeforetoday/fabric-admin/pkg/chaincode/internal/proposal"
+	"github.com/bestbeforetoday/fabric-admin/internal"
+	"github.com/bestbeforetoday/fabric-admin/internal/proposal"
 	"github.com/hyperledger/fabric-gateway/pkg/hash"
 	"github.com/hyperledger/fabric-gateway/pkg/identity"
 	"github.com/hyperledger/fabric-protos-go-apiv2/peer"

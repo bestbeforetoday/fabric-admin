@@ -1,7 +1,7 @@
 package proposal
 
 import (
-	"github.com/bestbeforetoday/fabric-admin/pkg/chaincode/internal"
+	"github.com/bestbeforetoday/fabric-admin/internal"
 	"github.com/hyperledger/fabric-protos-go-apiv2/common"
 	"github.com/hyperledger/fabric-protos-go-apiv2/peer"
 	"google.golang.org/protobuf/proto"

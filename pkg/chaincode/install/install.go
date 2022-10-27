@@ -17,10 +17,9 @@ import (
 
 const installTransactionName = "InstallChaincode"
 
-func Install(ctx context.Context, id identity.Identity, channelName string, options ...Option) error {
+func Install(ctx context.Context, id identity.Identity, options ...Option) error {
 	installCommand := &command{
-		signingID:   internal.NewSigningIdentity(id),
-		channelName: channelName,
+		signingID: internal.NewSigningIdentity(id),
 	}
 
 	if err := internal.ApplyOptions(installCommand, options...); err != nil {
@@ -130,14 +129,30 @@ func WithClientConnection(clientConnection grpc.ClientConnInterface) Option {
 	}
 }
 
-func WithChaincodePackage(reader io.Reader) Option {
+// WithChaincodePackage supplies the chaincode package to be installed.
+func WithChaincodePackage(chaincodePackageReader io.Reader) Option {
 	return func(c *command) error {
-		chaincodePackage, err := io.ReadAll(reader)
+		chaincodePackage, err := io.ReadAll(chaincodePackageReader)
 		if err != nil {
 			return err
 		}
 
+		return WithChaincodePackageBytes(chaincodePackage)(c)
+	}
+}
+
+// WithChaincodePackageBytes supplies the chaincode package to be installed.
+func WithChaincodePackageBytes(chaincodePackage []byte) Option {
+	return func(c *command) error {
 		c.chaincodePackage = chaincodePackage
+		return nil
+	}
+}
+
+// WithCallOptions specifies the gRPC call options to be used.
+func WithCallOptions(options ...grpc.CallOption) Option {
+	return func(c *command) error {
+		c.grpcOptions = append(c.grpcOptions, options...)
 		return nil
 	}
 }

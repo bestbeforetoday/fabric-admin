@@ -7,16 +7,16 @@ test: lint unit-test
 lint:
 	"$(base_dir)/scripts/check_gofmt.sh" "$(base_dir)"
 	go install honnef.co/go/tools/cmd/staticcheck@latest
-	staticcheck -f stylish "$(base_dir)/..."
-	go vet "$(base_dir)/..."
+	cd "$(base_dir)" && staticcheck -f stylish ./...
+	cd "$(base_dir)" && go vet ./...
 	go install github.com/securego/gosec/v2/cmd/gosec@latest
-	gosec -exclude-generated "$(base_dir)/..."
+	cd "$(base_dir)" && gosec -exclude-generated ./...
 
 .PHONEY: unit-test
 unit-test:
-	go test -timeout=10s -coverprofile="$(base_dir)/coverage.out" "$(base_dir)/..."
+	cd "$(base_dir)" && go test -timeout=10s -coverpkg=./... -coverprofile=coverage.out ./...
 
 .PHONEY: generate
 generate:
 	go install github.com/golang/mock/mockgen@v1.6
-	go generate "$(base_dir)/pkg/..."
+	cd "$(base_dir)" && go generate ./...

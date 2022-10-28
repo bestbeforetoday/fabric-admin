@@ -142,7 +142,7 @@ func TestInstall(t *testing.T) {
 
 		mockEndorser := NewMockEndorserClient(controller)
 		mockEndorser.EXPECT().
-			ProcessProposal(gomock.Eq(ctx), gomock.Any(), gomock.Len(0)).
+			ProcessProposal(gomock.Eq(ctx), gomock.Any(), gomock.Any()).
 			Return(NewProposalResponse(common.Status_SUCCESS, ""), nil)
 
 		err := Install(
@@ -163,7 +163,7 @@ func TestInstall(t *testing.T) {
 
 		mockEndorser := NewMockEndorserClient(controller)
 		mockEndorser.EXPECT().
-			ProcessProposal(gomock.Eq(ctx), gomock.Any(), gomock.Len(0)).
+			ProcessProposal(gomock.Eq(ctx), gomock.Any(), gomock.Any()).
 			Return(nil, expectedErr)
 
 		err := Install(
@@ -185,7 +185,7 @@ func TestInstall(t *testing.T) {
 
 		mockEndorser := NewMockEndorserClient(controller)
 		mockEndorser.EXPECT().
-			ProcessProposal(gomock.Eq(ctx), gomock.Any(), gomock.Len(0)).
+			ProcessProposal(gomock.Eq(ctx), gomock.Any(), gomock.Any()).
 			Return(NewProposalResponse(expectedStatus, expectedMessage), nil)
 
 		err := Install(
@@ -208,7 +208,7 @@ func TestInstall(t *testing.T) {
 		var signedProposal *peer.SignedProposal
 		mockEndorser := NewMockEndorserClient(controller)
 		mockEndorser.EXPECT().
-			ProcessProposal(gomock.Eq(ctx), gomock.Any(), gomock.Len(0)).
+			ProcessProposal(gomock.Eq(ctx), gomock.Any(), gomock.Any()).
 			Do(func(_ context.Context, in *peer.SignedProposal, _ ...grpc.CallOption) {
 				signedProposal = in
 			}).
@@ -249,7 +249,7 @@ func TestInstall(t *testing.T) {
 			var signedProposal *peer.SignedProposal
 			mockEndorser := NewMockEndorserClient(controller)
 			mockEndorser.EXPECT().
-				ProcessProposal(gomock.Eq(ctx), gomock.Any(), gomock.Len(0)).
+				ProcessProposal(gomock.Eq(ctx), gomock.Any(), gomock.Any()).
 				Do(func(_ context.Context, in *peer.SignedProposal, _ ...grpc.CallOption) {
 					signedProposal = in
 				}).
@@ -276,4 +276,32 @@ func TestInstall(t *testing.T) {
 			require.EqualValues(t, chaincodePackage, actual, "chaincode package")
 		})
 	}
+
+	t.Run("Endorser client called with supplied gRPC call options", func(t *testing.T) {
+		callOption := grpc.WaitForReady(true)
+
+		controller, ctx := gomock.WithContext(context.Background(), t)
+		defer controller.Finish()
+
+		mockEndorser := NewMockEndorserClient(controller)
+		mockEndorser.EXPECT().
+			ProcessProposal(
+				gomock.Eq(ctx),
+				gomock.Any(),
+				gomock.InAnyOrder([]grpc.CallOption{
+					callOption,
+				}),
+			).
+			Return(NewProposalResponse(common.Status_SUCCESS, ""), nil)
+
+		err := Install(
+			ctx,
+			NewIdentity(controller),
+			WithEndorserClient(mockEndorser),
+			WithSign(sign),
+			WithChaincodePackageBytes(chaincodePackage),
+			WithCallOptions(callOption),
+		)
+		require.NoError(t, err)
+	})
 }

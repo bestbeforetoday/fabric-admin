@@ -1,7 +1,6 @@
-package install
+package queryinstalled
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -51,6 +50,12 @@ func NewProposalResponse(status common.Status, message string) *peer.ProposalRes
 	}
 }
 
+func AssertMarshal(t *testing.T, m protoreflect.ProtoMessage) []byte {
+	result, err := proto.Marshal(m)
+	require.NoError(t, err)
+	return result
+}
+
 // AssertUnmarshal ensures that a protobuf is umarshaled without error
 func AssertUnmarshal(t *testing.T, b []byte, m protoreflect.ProtoMessage) {
 	err := proto.Unmarshal(b, m)
@@ -82,20 +87,23 @@ func AssertUnmarshalInvocationSpec(t *testing.T, signedProposal *peer.SignedProp
 	return input
 }
 
-func TestInstall(t *testing.T) {
+// AssertProtoEqual ensures an expected protobuf message matches an actual message
+func AssertProtoEqual(t *testing.T, expected protoreflect.ProtoMessage, actual protoreflect.ProtoMessage) {
+	require.True(t, proto.Equal(expected, actual), "Expected %v, got %v", expected, actual)
+}
+
+func TestQuery(t *testing.T) {
 	signature := []byte("SIGNATURE")
 	sign := NewSign(signature)
-	chaincodePackage := []byte("CHAINCODE_PACKAGE")
 
 	t.Run("Missing gRPC connection gives error", func(t *testing.T) {
 		controller, ctx := gomock.WithContext(context.Background(), t)
 		defer controller.Finish()
 
-		err := Install(
+		_, err := Query(
 			ctx,
 			NewIdentity(controller),
 			WithSign(sign),
-			WithChaincodePackageBytes(chaincodePackage),
 		)
 		require.ErrorContains(t, err, "gRPC")
 	})
@@ -109,31 +117,12 @@ func TestInstall(t *testing.T) {
 			ProcessProposal(gomock.Any(), gomock.Any(), gomock.Any()).
 			Times(0)
 
-		err := Install(
+		_, err := Query(
 			ctx,
 			NewIdentity(controller),
 			WithEndorserClient(mockEndorser),
-			WithChaincodePackageBytes(chaincodePackage),
 		)
 		require.ErrorContains(t, err, "sign")
-	})
-
-	t.Run("Missing chaincode package gives error", func(t *testing.T) {
-		controller, ctx := gomock.WithContext(context.Background(), t)
-		defer controller.Finish()
-
-		mockEndorser := NewMockEndorserClient(controller)
-		mockEndorser.EXPECT().
-			ProcessProposal(gomock.Any(), gomock.Any(), gomock.Any()).
-			Times(0)
-
-		err := Install(
-			ctx,
-			NewIdentity(controller),
-			WithEndorserClient(mockEndorser),
-			WithSign(sign),
-		)
-		require.ErrorContains(t, err, "chaincode")
 	})
 
 	t.Run("Endorser client called with supplied context", func(t *testing.T) {
@@ -145,12 +134,11 @@ func TestInstall(t *testing.T) {
 			ProcessProposal(gomock.Eq(ctx), gomock.Any(), gomock.Any()).
 			Return(NewProposalResponse(common.Status_SUCCESS, ""), nil)
 
-		err := Install(
+		_, err := Query(
 			ctx,
 			NewIdentity(controller),
 			WithEndorserClient(mockEndorser),
 			WithSign(sign),
-			WithChaincodePackageBytes(chaincodePackage),
 		)
 		require.NoError(t, err)
 	})
@@ -166,12 +154,11 @@ func TestInstall(t *testing.T) {
 			ProcessProposal(gomock.Eq(ctx), gomock.Any(), gomock.Any()).
 			Return(nil, expectedErr)
 
-		err := Install(
+		_, err := Query(
 			ctx,
 			NewIdentity(controller),
 			WithEndorserClient(mockEndorser),
 			WithSign(sign),
-			WithChaincodePackageBytes(chaincodePackage),
 		)
 		require.EqualError(t, err, expectedErr.Error())
 	})
@@ -188,17 +175,73 @@ func TestInstall(t *testing.T) {
 			ProcessProposal(gomock.Eq(ctx), gomock.Any(), gomock.Any()).
 			Return(NewProposalResponse(expectedStatus, expectedMessage), nil)
 
-		err := Install(
+		_, err := Query(
 			ctx,
 			NewIdentity(controller),
 			WithEndorserClient(mockEndorser),
 			WithSign(sign),
-			WithChaincodePackageBytes(chaincodePackage),
 		)
 
 		require.ErrorContainsf(t, err, fmt.Sprintf("%d", expectedStatus), "status code")
 		require.ErrorContains(t, err, expectedStatus.String(), "status name")
 		require.ErrorContains(t, err, expectedMessage, "message")
+	})
+
+	t.Run("Installed chaincodes returned on successful proposal response", func(t *testing.T) {
+		expected := &lifecycle.QueryInstalledChaincodesResult{
+			InstalledChaincodes: []*lifecycle.QueryInstalledChaincodesResult_InstalledChaincode{
+				{
+					PackageId: "PACKAGE_ID",
+					Label:     "LABEL",
+				},
+			},
+		}
+		response := NewProposalResponse(common.Status_SUCCESS, "")
+		response.Response.Payload = AssertMarshal(t, expected)
+
+		controller, ctx := gomock.WithContext(context.Background(), t)
+		defer controller.Finish()
+
+		mockEndorser := NewMockEndorserClient(controller)
+		mockEndorser.EXPECT().
+			ProcessProposal(gomock.Eq(ctx), gomock.Any(), gomock.Any()).
+			Return(response, nil)
+
+		actual, err := Query(
+			ctx,
+			NewIdentity(controller),
+			WithEndorserClient(mockEndorser),
+			WithSign(sign),
+		)
+		require.NoError(t, err)
+
+		AssertProtoEqual(t, expected, actual)
+	})
+
+	t.Run("Uses signer", func(t *testing.T) {
+		controller, ctx := gomock.WithContext(context.Background(), t)
+		defer controller.Finish()
+
+		var signedProposal *peer.SignedProposal
+		mockEndorser := NewMockEndorserClient(controller)
+		mockEndorser.EXPECT().
+			ProcessProposal(gomock.Eq(ctx), gomock.Any(), gomock.Any()).
+			Do(func(_ context.Context, in *peer.SignedProposal, _ ...grpc.CallOption) {
+				signedProposal = in
+			}).
+			Return(NewProposalResponse(common.Status_SUCCESS, ""), nil).
+			Times(1)
+
+		_, err := Query(
+			ctx,
+			NewIdentity(controller),
+			WithEndorserClient(mockEndorser),
+			WithSign(sign),
+		)
+		require.NoError(t, err)
+
+		actual := signedProposal.GetSignature()
+		require.EqualValues(t, signature, actual)
 	})
 
 	t.Run("Uses signer", func(t *testing.T) {
@@ -217,7 +260,7 @@ func TestInstall(t *testing.T) {
 			Return(NewProposalResponse(common.Status_SUCCESS, ""), nil).
 			Times(1)
 
-		err := Install(
+		_, err := Query(
 			ctx,
 			NewIdentity(controller),
 			WithEndorserClient(mockEndorser),
@@ -227,89 +270,12 @@ func TestInstall(t *testing.T) {
 			WithHash(func(message []byte) []byte {
 				return expected
 			}),
-			WithChaincodePackageBytes(chaincodePackage),
 		)
 		require.NoError(t, err)
 
 		actual := signedProposal.GetSignature()
 		require.EqualValues(t, expected, actual)
 	})
-
-	t.Run("Uses hash", func(t *testing.T) {
-		controller, ctx := gomock.WithContext(context.Background(), t)
-		defer controller.Finish()
-
-		var signedProposal *peer.SignedProposal
-		mockEndorser := NewMockEndorserClient(controller)
-		mockEndorser.EXPECT().
-			ProcessProposal(gomock.Eq(ctx), gomock.Any(), gomock.Any()).
-			Do(func(_ context.Context, in *peer.SignedProposal, _ ...grpc.CallOption) {
-				signedProposal = in
-			}).
-			Return(NewProposalResponse(common.Status_SUCCESS, ""), nil).
-			Times(1)
-
-		err := Install(
-			ctx,
-			NewIdentity(controller),
-			WithEndorserClient(mockEndorser),
-			WithSign(sign),
-			WithChaincodePackageBytes(chaincodePackage),
-		)
-		require.NoError(t, err)
-
-		actual := signedProposal.GetSignature()
-		require.EqualValues(t, signature, actual)
-	})
-
-	packageTests := []struct {
-		name   string
-		option Option
-	}{
-		{
-			name:   "Proposal includes supplied chaincode package bytes",
-			option: WithChaincodePackageBytes(chaincodePackage),
-		},
-		{
-			name:   "Proposal includes supplied chaincode package reader",
-			option: WithChaincodePackage(bytes.NewReader(chaincodePackage)),
-		},
-	}
-	for _, packageTest := range packageTests {
-		t.Run(packageTest.name, func(t *testing.T) {
-			controller, ctx := gomock.WithContext(context.Background(), t)
-			defer controller.Finish()
-
-			var signedProposal *peer.SignedProposal
-			mockEndorser := NewMockEndorserClient(controller)
-			mockEndorser.EXPECT().
-				ProcessProposal(gomock.Eq(ctx), gomock.Any(), gomock.Any()).
-				Do(func(_ context.Context, in *peer.SignedProposal, _ ...grpc.CallOption) {
-					signedProposal = in
-				}).
-				Return(NewProposalResponse(common.Status_SUCCESS, ""), nil).
-				Times(1)
-
-			err := Install(
-				ctx,
-				NewIdentity(controller),
-				WithEndorserClient(mockEndorser),
-				WithSign(sign),
-				packageTest.option,
-			)
-			require.NoError(t, err)
-
-			invocationSpec := AssertUnmarshalInvocationSpec(t, signedProposal)
-			args := invocationSpec.GetChaincodeSpec().GetInput().GetArgs()
-			require.Len(t, args, 2, "number of arguments")
-
-			chaincodeArgs := &lifecycle.InstallChaincodeArgs{}
-			AssertUnmarshal(t, args[1], chaincodeArgs)
-
-			actual := chaincodeArgs.GetChaincodeInstallPackage()
-			require.EqualValues(t, chaincodePackage, actual, "chaincode package")
-		})
-	}
 
 	t.Run("Endorser client called with supplied gRPC call options", func(t *testing.T) {
 		callOption := grpc.WaitForReady(true)
@@ -328,12 +294,11 @@ func TestInstall(t *testing.T) {
 			).
 			Return(NewProposalResponse(common.Status_SUCCESS, ""), nil)
 
-		err := Install(
+		_, err := Query(
 			ctx,
 			NewIdentity(controller),
 			WithEndorserClient(mockEndorser),
 			WithSign(sign),
-			WithChaincodePackageBytes(chaincodePackage),
 			WithCallOptions(callOption),
 		)
 		require.NoError(t, err)

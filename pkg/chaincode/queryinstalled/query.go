@@ -1,9 +1,9 @@
-package install
+package queryinstalled
 
 import (
 	"context"
 	"errors"
-	"io"
+	"fmt"
 
 	"github.com/bestbeforetoday/fabric-admin/internal"
 	"github.com/bestbeforetoday/fabric-admin/internal/proposal"
@@ -15,59 +15,64 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const installTransactionName = "InstallChaincode"
+const queryInstalledTransactionName = "QueryInstalledChaincodes"
 
-func Install(ctx context.Context, id identity.Identity, options ...Option) error {
+func Query(ctx context.Context, id identity.Identity, options ...Option) (*lifecycle.QueryInstalledChaincodesResult, error) {
 	installCommand := &command{
 		signingID: internal.NewSigningIdentity(id),
 	}
 
 	if err := internal.ApplyOptions(installCommand, options...); err != nil {
-		return err
+		return nil, err
 	}
 
 	return installCommand.run(ctx)
 }
 
 type command struct {
-	signingID        *internal.SigningIdentity
-	channelName      string
-	grpcClient       peer.EndorserClient
-	grpcOptions      []grpc.CallOption
-	chaincodePackage []byte
+	signingID   *internal.SigningIdentity
+	channelName string
+	grpcClient  peer.EndorserClient
+	grpcOptions []grpc.CallOption
 }
 
-func (c *command) run(ctx context.Context) error {
+func (c *command) run(ctx context.Context) (*lifecycle.QueryInstalledChaincodesResult, error) {
 	if err := c.validate(); err != nil {
-		return err
+		return nil, err
 	}
 
 	signedProposal, err := c.signedProposal()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	proposalResponse, err := c.grpcClient.ProcessProposal(ctx, signedProposal, c.grpcOptions...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return internal.CheckSuccessfulProposalResponse(proposalResponse)
+	if err = internal.CheckSuccessfulProposalResponse(proposalResponse); err != nil {
+		return nil, err
+	}
+
+	result := &lifecycle.QueryInstalledChaincodesResult{}
+	if err = proto.Unmarshal(proposalResponse.GetResponse().GetPayload(), result); err != nil {
+		return nil, fmt.Errorf("failed to deserialize query installed chaincode result: %w", err)
+	}
+
+	return result, nil
 }
 
 func (c *command) validate() error {
 	if c.grpcClient == nil {
 		return errors.New("no gRPC client supplied")
 	}
-	if c.chaincodePackage == nil {
-		return errors.New("no chaincode package supplied")
-	}
 
 	return nil
 }
 
 func (c *command) signedProposal() (*peer.SignedProposal, error) {
-	argBytes, err := c.installChaincodeArgsBytes()
+	argBytes, err := c.queryInstalledChaincodesArgsBytes()
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +81,7 @@ func (c *command) signedProposal() (*peer.SignedProposal, error) {
 		c.signingID,
 		c.channelName,
 		internal.LifecycleChaincodeName,
-		installTransactionName,
+		queryInstalledTransactionName,
 		proposal.WithBytesArguments(argBytes),
 	)
 	if err != nil {
@@ -95,10 +100,8 @@ func (c *command) signedProposal() (*peer.SignedProposal, error) {
 	return signedProposal, nil
 }
 
-func (c *command) installChaincodeArgsBytes() ([]byte, error) {
-	installArgs := &lifecycle.InstallChaincodeArgs{
-		ChaincodeInstallPackage: c.chaincodePackage,
-	}
+func (c *command) queryInstalledChaincodesArgsBytes() ([]byte, error) {
+	installArgs := &lifecycle.QueryInstalledChaincodesArgs{}
 	return proto.Marshal(installArgs)
 }
 
@@ -125,26 +128,6 @@ func WithHash(hash hash.Hash) Option {
 func WithClientConnection(clientConnection grpc.ClientConnInterface) Option {
 	return func(c *command) error {
 		c.grpcClient = peer.NewEndorserClient(clientConnection)
-		return nil
-	}
-}
-
-// WithChaincodePackage supplies the chaincode package to be installed.
-func WithChaincodePackage(chaincodePackageReader io.Reader) Option {
-	return func(c *command) error {
-		chaincodePackage, err := io.ReadAll(chaincodePackageReader)
-		if err != nil {
-			return err
-		}
-
-		return WithChaincodePackageBytes(chaincodePackage)(c)
-	}
-}
-
-// WithChaincodePackageBytes supplies the chaincode package to be installed.
-func WithChaincodePackageBytes(chaincodePackage []byte) Option {
-	return func(c *command) error {
-		c.chaincodePackage = chaincodePackage
 		return nil
 	}
 }

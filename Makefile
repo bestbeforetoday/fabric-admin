@@ -14,7 +14,7 @@ lint:
 
 .PHONEY: unit-test
 unit-test:
-	cd "$(base_dir)" && go test -timeout=10s -coverpkg=./... -coverprofile=coverage.out ./...
+	cd "$(base_dir)" && go test -timeout=10s -coverpkg=./pkg...,./internal/... -coverprofile=coverage.out ./...
 
 .PHONEY: generate
 generate:

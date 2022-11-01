@@ -1,18 +1,19 @@
-package internal
+package proposal
 
 import (
 	"crypto/rand"
 	"encoding/hex"
 
+	"github.com/bestbeforetoday/fabric-admin/internal"
 	"github.com/hyperledger/fabric-protos-go-apiv2/common"
 )
 
-type TransactionContext struct {
+type transactionContext struct {
 	TransactionID   string
 	SignatureHeader *common.SignatureHeader
 }
 
-func NewTransactionContext(signingIdentity *SigningIdentity) (*TransactionContext, error) {
+func newTransactionContext(signingIdentity *internal.SigningIdentity) (*transactionContext, error) {
 	nonce := make([]byte, 24)
 	if _, err := rand.Read(nonce); err != nil {
 		return nil, err
@@ -32,7 +33,7 @@ func NewTransactionContext(signingIdentity *SigningIdentity) (*TransactionContex
 		Nonce:   nonce,
 	}
 
-	transactionCtx := &TransactionContext{
+	transactionCtx := &transactionContext{
 		TransactionID:   transactionID,
 		SignatureHeader: signatureHeader,
 	}

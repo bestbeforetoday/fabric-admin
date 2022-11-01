@@ -10,7 +10,6 @@ import (
 
 func New(
 	signingID *internal.SigningIdentity,
-	channelName string,
 	chaincodeName string,
 	transactionName string,
 	options ...Option,
@@ -22,7 +21,6 @@ func New(
 
 	builder := &builder{
 		signingID:       signingID,
-		channelName:     channelName,
 		chaincodeName:   chaincodeName,
 		transactionName: transactionName,
 		transactionCtx:  transactionCtx,
@@ -164,6 +162,14 @@ func stringsAsBytes(strings []string) [][]byte {
 func WithTransient(transient map[string][]byte) Option {
 	return func(b *builder) error {
 		b.transient = transient
+		return nil
+	}
+}
+
+// WithChannel specifies the name of the channel to which the transaction proposal is directed.
+func WithChannel(channelName string) Option {
+	return func(b *builder) error {
+		b.channelName = channelName
 		return nil
 	}
 }

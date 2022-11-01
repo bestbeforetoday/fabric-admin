@@ -14,7 +14,7 @@ func New(
 	transactionName string,
 	options ...Option,
 ) (*peer.Proposal, error) {
-	transactionCtx, err := internal.NewTransactionContext(signingID)
+	transactionCtx, err := newTransactionContext(signingID)
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +38,7 @@ type builder struct {
 	channelName     string
 	chaincodeName   string
 	transactionName string
-	transactionCtx  *internal.TransactionContext
+	transactionCtx  *transactionContext
 	transient       map[string][]byte
 	args            [][]byte
 }

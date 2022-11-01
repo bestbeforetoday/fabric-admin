@@ -31,7 +31,6 @@ func Query(ctx context.Context, id identity.Identity, options ...Option) (*lifec
 
 type command struct {
 	signingID   *internal.SigningIdentity
-	channelName string
 	grpcClient  peer.EndorserClient
 	grpcOptions []grpc.CallOption
 }
@@ -79,7 +78,6 @@ func (c *command) signedProposal() (*peer.SignedProposal, error) {
 
 	proposal, err := proposal.New(
 		c.signingID,
-		c.channelName,
 		internal.LifecycleChaincodeName,
 		queryInstalledTransactionName,
 		proposal.WithBytesArguments(argBytes),

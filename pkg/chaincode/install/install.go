@@ -31,7 +31,6 @@ func Install(ctx context.Context, id identity.Identity, options ...Option) error
 
 type command struct {
 	signingID        *internal.SigningIdentity
-	channelName      string
 	grpcClient       peer.EndorserClient
 	grpcOptions      []grpc.CallOption
 	chaincodePackage []byte
@@ -74,7 +73,6 @@ func (c *command) signedProposal() (*peer.SignedProposal, error) {
 
 	proposal, err := proposal.New(
 		c.signingID,
-		c.channelName,
 		internal.LifecycleChaincodeName,
 		installTransactionName,
 		proposal.WithBytesArguments(argBytes),

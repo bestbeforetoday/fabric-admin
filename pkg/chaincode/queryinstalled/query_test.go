@@ -31,10 +31,11 @@ func WithEndorserClient(grpcClient peer.EndorserClient) Option {
 	}
 }
 
-func NewSigningIdentity(controller *gomock.Controller) *MockSigningIdentity {
+func NewSigningIdentity(controller *gomock.Controller, signature []byte) *MockSigningIdentity {
 	mockIdentity := NewMockSigningIdentity(controller)
-	mockIdentity.EXPECT().Creator().AnyTimes()
-	mockIdentity.EXPECT().Sign(gomock.Any()).AnyTimes()
+	mockIdentity.EXPECT().MspID().AnyTimes()
+	mockIdentity.EXPECT().Credentials().AnyTimes()
+	mockIdentity.EXPECT().Sign(gomock.Any()).Return(signature, nil).AnyTimes()
 
 	return mockIdentity
 }
@@ -97,7 +98,7 @@ func TestQuery(t *testing.T) {
 
 		_, err := Query(
 			ctx,
-			NewSigningIdentity(controller),
+			NewSigningIdentity(controller, nil),
 		)
 		require.ErrorContains(t, err, "gRPC")
 	})
@@ -113,7 +114,7 @@ func TestQuery(t *testing.T) {
 
 		_, err := Query(
 			ctx,
-			NewSigningIdentity(controller),
+			NewSigningIdentity(controller, nil),
 			WithEndorserClient(mockEndorser),
 		)
 		require.NoError(t, err)
@@ -132,7 +133,7 @@ func TestQuery(t *testing.T) {
 
 		_, err := Query(
 			ctx,
-			NewSigningIdentity(controller),
+			NewSigningIdentity(controller, nil),
 			WithEndorserClient(mockEndorser),
 		)
 		require.EqualError(t, err, expectedErr.Error())
@@ -152,7 +153,7 @@ func TestQuery(t *testing.T) {
 
 		_, err := Query(
 			ctx,
-			NewSigningIdentity(controller),
+			NewSigningIdentity(controller, nil),
 			WithEndorserClient(mockEndorser),
 		)
 
@@ -183,7 +184,7 @@ func TestQuery(t *testing.T) {
 
 		actual, err := Query(
 			ctx,
-			NewSigningIdentity(controller),
+			NewSigningIdentity(controller, nil),
 			WithEndorserClient(mockEndorser),
 		)
 		require.NoError(t, err)
@@ -207,13 +208,9 @@ func TestQuery(t *testing.T) {
 			Return(NewProposalResponse(common.Status_SUCCESS, ""), nil).
 			Times(1)
 
-		mockIdentity := NewMockSigningIdentity(controller)
-		mockIdentity.EXPECT().Creator().AnyTimes()
-		mockIdentity.EXPECT().Sign(gomock.Any()).Return(expected, nil)
-
 		_, err := Query(
 			ctx,
-			mockIdentity,
+			NewSigningIdentity(controller, expected),
 			WithEndorserClient(mockEndorser),
 		)
 		require.NoError(t, err)
@@ -241,7 +238,7 @@ func TestQuery(t *testing.T) {
 
 		_, err := Query(
 			ctx,
-			NewSigningIdentity(controller),
+			NewSigningIdentity(controller, nil),
 			WithEndorserClient(mockEndorser),
 			WithCallOptions(callOption),
 		)

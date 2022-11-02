@@ -1,6 +1,5 @@
 /*
 Copyright IBM Corp. All Rights Reserved.
-
 SPDX-License-Identifier: Apache-2.0
 */
 
@@ -13,8 +12,7 @@ import (
 
 	"github.com/bestbeforetoday/fabric-admin/internal"
 	"github.com/bestbeforetoday/fabric-admin/internal/proposal"
-	"github.com/hyperledger/fabric-gateway/pkg/hash"
-	"github.com/hyperledger/fabric-gateway/pkg/identity"
+	"github.com/bestbeforetoday/fabric-admin/pkg/identity"
 	"github.com/hyperledger/fabric-protos-go-apiv2/peer"
 	"github.com/hyperledger/fabric-protos-go-apiv2/peer/lifecycle"
 	"google.golang.org/grpc"
@@ -23,9 +21,9 @@ import (
 
 const queryInstalledTransactionName = "QueryInstalledChaincodes"
 
-func Query(ctx context.Context, id identity.Identity, options ...Option) (*lifecycle.QueryInstalledChaincodesResult, error) {
+func Query(ctx context.Context, signingID identity.SigningIdentity, options ...Option) (*lifecycle.QueryInstalledChaincodesResult, error) {
 	installCommand := &command{
-		signingID: internal.NewSigningIdentity(id),
+		signingID: signingID,
 	}
 
 	if err := internal.ApplyOptions(installCommand, options...); err != nil {
@@ -36,7 +34,7 @@ func Query(ctx context.Context, id identity.Identity, options ...Option) (*lifec
 }
 
 type command struct {
-	signingID   *internal.SigningIdentity
+	signingID   identity.SigningIdentity
 	grpcClient  peer.EndorserClient
 	grpcOptions []grpc.CallOption
 }
@@ -92,7 +90,12 @@ func (c *command) signedProposal() (*peer.SignedProposal, error) {
 		return nil, err
 	}
 
-	signature, proposalBytes, err := c.signingID.SignMessage(proposal)
+	proposalBytes, err := proto.Marshal(proposal)
+	if err != nil {
+		return nil, err
+	}
+
+	signature, err := c.signingID.Sign(proposalBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -110,22 +113,6 @@ func (c *command) queryInstalledChaincodesArgsBytes() ([]byte, error) {
 }
 
 type Option = func(*command) error
-
-// WithSign uses the supplied signing implementation to sign messages.
-func WithSign(sign identity.Sign) Option {
-	return func(c *command) error {
-		c.signingID.Sign = sign
-		return nil
-	}
-}
-
-// WithHash uses the supplied hashing implementation to generate digital signatures.
-func WithHash(hash hash.Hash) Option {
-	return func(c *command) error {
-		c.signingID.Hash = hash
-		return nil
-	}
-}
 
 // WithClientConnection uses the supplied gRPC client connection. This should be shared by all commands
 // connecting to the same network node.

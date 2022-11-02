@@ -18,6 +18,8 @@ import (
 	"google.golang.org/grpc"
 )
 
+const chaincodePackageEnv = "CHAINCODE_PACKAGE"
+
 func main() {
 	grpcConnection := newGrpcConnection()
 	defer grpcConnection.Close()
@@ -37,7 +39,7 @@ type runner struct {
 }
 
 func (r *runner) install() {
-	chaincodePackage, err := os.ReadFile("../basic.tar.gz")
+	chaincodePackage, err := os.ReadFile(os.Getenv(chaincodePackageEnv)) //#nosec G304 -- test input
 	if err != nil {
 		panic(err)
 	}
@@ -52,7 +54,7 @@ func (r *runner) install() {
 		install.WithChaincodePackageBytes(chaincodePackage),
 	)
 	if err != nil {
-		fmt.Printf("Install failed: %v\n", err)
+		panic(err)
 	}
 }
 

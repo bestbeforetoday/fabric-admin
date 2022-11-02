@@ -1,6 +1,5 @@
 /*
 Copyright IBM Corp. All Rights Reserved.
-
 SPDX-License-Identifier: Apache-2.0
 */
 
@@ -8,6 +7,7 @@ package proposal
 
 import (
 	"github.com/bestbeforetoday/fabric-admin/internal"
+	"github.com/bestbeforetoday/fabric-admin/pkg/identity"
 	"github.com/hyperledger/fabric-protos-go-apiv2/common"
 	"github.com/hyperledger/fabric-protos-go-apiv2/peer"
 	"google.golang.org/protobuf/proto"
@@ -15,7 +15,7 @@ import (
 )
 
 func New(
-	signingID *internal.SigningIdentity,
+	signingID identity.SigningIdentity,
 	chaincodeName string,
 	transactionName string,
 	options ...Option,
@@ -40,7 +40,7 @@ func New(
 }
 
 type builder struct {
-	signingID       *internal.SigningIdentity
+	signingID       identity.SigningIdentity
 	channelName     string
 	chaincodeName   string
 	transactionName string

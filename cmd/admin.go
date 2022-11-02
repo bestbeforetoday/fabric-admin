@@ -1,6 +1,5 @@
 /*
 Copyright IBM Corp. All Rights Reserved.
-
 SPDX-License-Identifier: Apache-2.0
 */
 
@@ -13,7 +12,8 @@ import (
 
 	"github.com/bestbeforetoday/fabric-admin/pkg/chaincode/install"
 	"github.com/bestbeforetoday/fabric-admin/pkg/chaincode/queryinstalled"
-	"github.com/hyperledger/fabric-gateway/pkg/identity"
+	"github.com/bestbeforetoday/fabric-admin/pkg/identity"
+	"github.com/hyperledger/fabric-gateway/pkg/hash"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
@@ -24,8 +24,7 @@ func main() {
 
 	r := &runner{
 		grpcConnection: grpcConnection,
-		id:             newIdentity(),
-		sign:           newSign(),
+		signingID:      identity.NewSigningIdentity(newIdentity(), newSign(), hash.SHA256),
 	}
 
 	r.install()
@@ -34,8 +33,7 @@ func main() {
 
 type runner struct {
 	grpcConnection grpc.ClientConnInterface
-	id             identity.Identity
-	sign           identity.Sign
+	signingID      identity.SigningIdentity
 }
 
 func (r *runner) install() {
@@ -49,9 +47,8 @@ func (r *runner) install() {
 
 	err = install.Install(
 		ctx,
-		r.id,
+		r.signingID,
 		install.WithClientConnection(r.grpcConnection),
-		install.WithSign(r.sign),
 		install.WithChaincodePackageBytes(chaincodePackage),
 	)
 	if err != nil {
@@ -65,9 +62,8 @@ func (r *runner) queryInstalled() {
 
 	result, err := queryinstalled.Query(
 		ctx,
-		r.id,
+		r.signingID,
 		queryinstalled.WithClientConnection(r.grpcConnection),
-		queryinstalled.WithSign(r.sign),
 	)
 	if err != nil {
 		panic(err)

@@ -1,6 +1,5 @@
 /*
 Copyright IBM Corp. All Rights Reserved.
-
 SPDX-License-Identifier: Apache-2.0
 */
 
@@ -14,7 +13,6 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/hyperledger/fabric-gateway/pkg/identity"
 	"github.com/hyperledger/fabric-protos-go-apiv2/common"
 	"github.com/hyperledger/fabric-protos-go-apiv2/peer"
 	"github.com/hyperledger/fabric-protos-go-apiv2/peer/lifecycle"
@@ -25,7 +23,7 @@ import (
 )
 
 //go:generate mockgen -destination ./endorser_mock_test.go -package ${GOPACKAGE} github.com/hyperledger/fabric-protos-go-apiv2/peer EndorserClient
-//go:generate mockgen -destination ./identity_mock_test.go -package ${GOPACKAGE} github.com/hyperledger/fabric-gateway/pkg/identity Identity
+//go:generate mockgen -destination ./signingidentity_mock_test.go -package ${GOPACKAGE} github.com/bestbeforetoday/fabric-admin/pkg/identity SigningIdentity
 
 func WithEndorserClient(grpcClient peer.EndorserClient) Option {
 	return func(b *command) error {
@@ -34,18 +32,12 @@ func WithEndorserClient(grpcClient peer.EndorserClient) Option {
 	}
 }
 
-func NewIdentity(controller *gomock.Controller) *MockIdentity {
-	mockIdentity := NewMockIdentity(controller)
-	mockIdentity.EXPECT().MspID().AnyTimes()
-	mockIdentity.EXPECT().Credentials().AnyTimes()
+func NewSigningIdentity(controller *gomock.Controller) *MockSigningIdentity {
+	mockIdentity := NewMockSigningIdentity(controller)
+	mockIdentity.EXPECT().Creator().AnyTimes()
+	mockIdentity.EXPECT().Sign(gomock.Any()).AnyTimes()
 
 	return mockIdentity
-}
-
-func NewSign(result []byte) identity.Sign {
-	return func(_ []byte) ([]byte, error) {
-		return result, nil
-	}
 }
 
 func NewProposalResponse(status common.Status, message string) *peer.ProposalResponse {
@@ -89,8 +81,6 @@ func AssertUnmarshalInvocationSpec(t *testing.T, signedProposal *peer.SignedProp
 }
 
 func TestInstall(t *testing.T) {
-	signature := []byte("SIGNATURE")
-	sign := NewSign(signature)
 	chaincodePackage := []byte("CHAINCODE_PACKAGE")
 
 	t.Run("Missing gRPC connection gives error", func(t *testing.T) {
@@ -99,29 +89,10 @@ func TestInstall(t *testing.T) {
 
 		err := Install(
 			ctx,
-			NewIdentity(controller),
-			WithSign(sign),
+			NewSigningIdentity(controller),
 			WithChaincodePackageBytes(chaincodePackage),
 		)
 		require.ErrorContains(t, err, "gRPC")
-	})
-
-	t.Run("Missing signer gives error", func(t *testing.T) {
-		controller, ctx := gomock.WithContext(context.Background(), t)
-		defer controller.Finish()
-
-		mockEndorser := NewMockEndorserClient(controller)
-		mockEndorser.EXPECT().
-			ProcessProposal(gomock.Any(), gomock.Any(), gomock.Any()).
-			Times(0)
-
-		err := Install(
-			ctx,
-			NewIdentity(controller),
-			WithEndorserClient(mockEndorser),
-			WithChaincodePackageBytes(chaincodePackage),
-		)
-		require.ErrorContains(t, err, "sign")
 	})
 
 	t.Run("Missing chaincode package gives error", func(t *testing.T) {
@@ -135,9 +106,8 @@ func TestInstall(t *testing.T) {
 
 		err := Install(
 			ctx,
-			NewIdentity(controller),
+			NewSigningIdentity(controller),
 			WithEndorserClient(mockEndorser),
-			WithSign(sign),
 		)
 		require.ErrorContains(t, err, "chaincode")
 	})
@@ -153,9 +123,8 @@ func TestInstall(t *testing.T) {
 
 		err := Install(
 			ctx,
-			NewIdentity(controller),
+			NewSigningIdentity(controller),
 			WithEndorserClient(mockEndorser),
-			WithSign(sign),
 			WithChaincodePackageBytes(chaincodePackage),
 		)
 		require.NoError(t, err)
@@ -174,9 +143,8 @@ func TestInstall(t *testing.T) {
 
 		err := Install(
 			ctx,
-			NewIdentity(controller),
+			NewSigningIdentity(controller),
 			WithEndorserClient(mockEndorser),
-			WithSign(sign),
 			WithChaincodePackageBytes(chaincodePackage),
 		)
 		require.EqualError(t, err, expectedErr.Error())
@@ -196,9 +164,8 @@ func TestInstall(t *testing.T) {
 
 		err := Install(
 			ctx,
-			NewIdentity(controller),
+			NewSigningIdentity(controller),
 			WithEndorserClient(mockEndorser),
-			WithSign(sign),
 			WithChaincodePackageBytes(chaincodePackage),
 		)
 
@@ -208,7 +175,7 @@ func TestInstall(t *testing.T) {
 	})
 
 	t.Run("Uses signer", func(t *testing.T) {
-		expected := []byte("HASH")
+		expected := []byte("SIGNATURE")
 
 		controller, ctx := gomock.WithContext(context.Background(), t)
 		defer controller.Finish()
@@ -223,49 +190,20 @@ func TestInstall(t *testing.T) {
 			Return(NewProposalResponse(common.Status_SUCCESS, ""), nil).
 			Times(1)
 
+		mockIdentity := NewMockSigningIdentity(controller)
+		mockIdentity.EXPECT().Creator().AnyTimes()
+		mockIdentity.EXPECT().Sign(gomock.Any()).Return(expected, nil)
+
 		err := Install(
 			ctx,
-			NewIdentity(controller),
+			mockIdentity,
 			WithEndorserClient(mockEndorser),
-			WithSign(func(digest []byte) ([]byte, error) {
-				return digest, nil // Use the hash as the signature
-			}),
-			WithHash(func(message []byte) []byte {
-				return expected
-			}),
 			WithChaincodePackageBytes(chaincodePackage),
 		)
 		require.NoError(t, err)
 
 		actual := signedProposal.GetSignature()
 		require.EqualValues(t, expected, actual)
-	})
-
-	t.Run("Uses hash", func(t *testing.T) {
-		controller, ctx := gomock.WithContext(context.Background(), t)
-		defer controller.Finish()
-
-		var signedProposal *peer.SignedProposal
-		mockEndorser := NewMockEndorserClient(controller)
-		mockEndorser.EXPECT().
-			ProcessProposal(gomock.Eq(ctx), gomock.Any(), gomock.Any()).
-			Do(func(_ context.Context, in *peer.SignedProposal, _ ...grpc.CallOption) {
-				signedProposal = in
-			}).
-			Return(NewProposalResponse(common.Status_SUCCESS, ""), nil).
-			Times(1)
-
-		err := Install(
-			ctx,
-			NewIdentity(controller),
-			WithEndorserClient(mockEndorser),
-			WithSign(sign),
-			WithChaincodePackageBytes(chaincodePackage),
-		)
-		require.NoError(t, err)
-
-		actual := signedProposal.GetSignature()
-		require.EqualValues(t, signature, actual)
 	})
 
 	packageTests := []struct {
@@ -298,9 +236,8 @@ func TestInstall(t *testing.T) {
 
 			err := Install(
 				ctx,
-				NewIdentity(controller),
+				NewSigningIdentity(controller),
 				WithEndorserClient(mockEndorser),
-				WithSign(sign),
 				packageTest.option,
 			)
 			require.NoError(t, err)
@@ -336,9 +273,8 @@ func TestInstall(t *testing.T) {
 
 		err := Install(
 			ctx,
-			NewIdentity(controller),
+			NewSigningIdentity(controller),
 			WithEndorserClient(mockEndorser),
-			WithSign(sign),
 			WithChaincodePackageBytes(chaincodePackage),
 			WithCallOptions(callOption),
 		)

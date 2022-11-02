@@ -1,6 +1,5 @@
 /*
 Copyright IBM Corp. All Rights Reserved.
-
 SPDX-License-Identifier: Apache-2.0
 */
 
@@ -8,9 +7,10 @@ package proposal
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 
-	"github.com/bestbeforetoday/fabric-admin/internal"
+	"github.com/bestbeforetoday/fabric-admin/pkg/identity"
 	"github.com/hyperledger/fabric-protos-go-apiv2/common"
 )
 
@@ -19,20 +19,20 @@ type transactionContext struct {
 	SignatureHeader *common.SignatureHeader
 }
 
-func newTransactionContext(signingIdentity *internal.SigningIdentity) (*transactionContext, error) {
+func newTransactionContext(signingID identity.SigningIdentity) (*transactionContext, error) {
 	nonce := make([]byte, 24)
 	if _, err := rand.Read(nonce); err != nil {
 		return nil, err
 	}
 
-	creator, err := signingIdentity.Creator()
+	creator, err := signingID.Creator()
 	if err != nil {
 		return nil, err
 	}
 
 	saltedCreator := append(nonce, creator...)
-	rawTransactionID := signingIdentity.Hash(saltedCreator)
-	transactionID := hex.EncodeToString(rawTransactionID)
+	rawTransactionID := sha256.Sum256(saltedCreator)
+	transactionID := hex.EncodeToString(rawTransactionID[:])
 
 	signatureHeader := &common.SignatureHeader{
 		Creator: creator,

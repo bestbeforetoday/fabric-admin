@@ -12,6 +12,8 @@ import (
 
 	"github.com/bestbeforetoday/fabric-admin/pkg/identity"
 	"github.com/hyperledger/fabric-protos-go-apiv2/common"
+	"github.com/hyperledger/fabric-protos-go-apiv2/msp"
+	"google.golang.org/protobuf/proto"
 )
 
 type transactionContext struct {
@@ -25,7 +27,11 @@ func newTransactionContext(signingID identity.SigningIdentity) (*transactionCont
 		return nil, err
 	}
 
-	creator, err := signingID.Creator()
+	serializedIdentity := &msp.SerializedIdentity{
+		Mspid:   signingID.MspID(),
+		IdBytes: signingID.Credentials(),
+	}
+	creator, err := proto.Marshal(serializedIdentity)
 	if err != nil {
 		return nil, err
 	}

@@ -35,3 +35,6 @@ jobs:
       with:
         name: coverage.out
         path: coverage.out
+
+    - name: Integration test
+      run: make integration-test

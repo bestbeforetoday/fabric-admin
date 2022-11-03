@@ -6,7 +6,7 @@ client_key = $(TMPDIR)/private-key.pem
 ca_cert = $(TMPDIR)/ca.pem
 
 .PHONEY: test
-test: lint unit-test
+test: lint unit-test integration-test
 
 .PHONEY: lint
 lint:

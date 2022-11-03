@@ -6,7 +6,7 @@ SPDX-License-Identifier: Apache-2.0
 package proposal
 
 import (
-	"github.com/bestbeforetoday/fabric-admin/internal"
+	admincommon "github.com/bestbeforetoday/fabric-admin/internal/common"
 	"github.com/bestbeforetoday/fabric-admin/pkg/identity"
 	"github.com/hyperledger/fabric-protos-go-apiv2/common"
 	"github.com/hyperledger/fabric-protos-go-apiv2/peer"
@@ -26,13 +26,12 @@ func New(
 	}
 
 	builder := &builder{
-		signingID:       signingID,
 		chaincodeName:   chaincodeName,
 		transactionName: transactionName,
 		transactionCtx:  transactionCtx,
 	}
 
-	if err = internal.ApplyOptions(builder, options...); err != nil {
+	if err = admincommon.ApplyOptions(builder, options...); err != nil {
 		return nil, err
 	}
 
@@ -40,7 +39,6 @@ func New(
 }
 
 type builder struct {
-	signingID       identity.SigningIdentity
 	channelName     string
 	chaincodeName   string
 	transactionName string

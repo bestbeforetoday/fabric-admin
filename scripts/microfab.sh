@@ -28,7 +28,7 @@ up() {
 
 down() {
     if isRunning; then
-        docker kill microfab
+        docker stop microfab
     fi
 }
 

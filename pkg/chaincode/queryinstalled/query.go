@@ -10,7 +10,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/bestbeforetoday/fabric-admin/internal"
+	"github.com/bestbeforetoday/fabric-admin/internal/common"
 	"github.com/bestbeforetoday/fabric-admin/internal/proposal"
 	"github.com/bestbeforetoday/fabric-admin/pkg/identity"
 	"github.com/hyperledger/fabric-protos-go-apiv2/peer"
@@ -26,7 +26,7 @@ func Query(ctx context.Context, signingID identity.SigningIdentity, options ...O
 		signingID: signingID,
 	}
 
-	if err := internal.ApplyOptions(installCommand, options...); err != nil {
+	if err := common.ApplyOptions(installCommand, options...); err != nil {
 		return nil, err
 	}
 
@@ -54,7 +54,7 @@ func (c *command) run(ctx context.Context) (*lifecycle.QueryInstalledChaincodesR
 		return nil, err
 	}
 
-	if err = internal.CheckSuccessfulProposalResponse(proposalResponse); err != nil {
+	if err = proposal.CheckSuccessfulResponse(proposalResponse); err != nil {
 		return nil, err
 	}
 
@@ -82,7 +82,7 @@ func (c *command) signedProposal() (*peer.SignedProposal, error) {
 
 	proposal, err := proposal.New(
 		c.signingID,
-		internal.LifecycleChaincodeName,
+		common.LifecycleChaincodeName,
 		queryInstalledTransactionName,
 		proposal.WithBytesArguments(argBytes),
 	)

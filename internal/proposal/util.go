@@ -1,9 +1,4 @@
-/*
-Copyright IBM Corp. All Rights Reserved.
-SPDX-License-Identifier: Apache-2.0
-*/
-
-package internal
+package proposal
 
 import (
 	"fmt"
@@ -12,19 +7,7 @@ import (
 	"github.com/hyperledger/fabric-protos-go-apiv2/peer"
 )
 
-const LifecycleChaincodeName = "_lifecycle"
-
-func ApplyOptions[T any, O ~func(*T) error](target *T, options ...O) error {
-	for _, option := range options {
-		if err := option(target); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func CheckSuccessfulProposalResponse(proposalResponse *peer.ProposalResponse) error {
+func CheckSuccessfulResponse(proposalResponse *peer.ProposalResponse) error {
 	response := proposalResponse.GetResponse()
 	status := response.GetStatus()
 
